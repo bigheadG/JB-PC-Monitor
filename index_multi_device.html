@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>JB People Counter - Multi Device Dashboard</title>
+<style>
+:root{--bg:#0b1020;--card:#131a2d;--card2:#101625;--text:#f5f7fb;--muted:#9aa6bf;--line:#26304a;--good:#23c483;--bad:#ff5d73;--warn:#ffb020;--accent:#55d6ff;--accent2:#8ee6ff;--shadow:0 10px 28px rgba(0,0,0,.28);--radius:18px}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b1020,#0d1426);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh}
+.wrap{width:min(1180px,100%);margin:0 auto;padding:18px}.header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+h1{margin:0;font-size:clamp(26px,5vw,40px)}.subtitle{color:var(--muted);margin-top:5px;font-size:14px}
+.status-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#0f1525;padding:9px 12px;border-radius:999px;font-weight:800}.dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:14px}.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+.sum-label,.k{color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.05em}.sum-value{font-size:34px;font-weight:850;margin-top:6px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}input,select{background:#0a1020;border:1px solid var(--line);color:var(--text);border-radius:12px;padding:11px 12px;outline:none}
+#searchInput{flex:1;min-width:220px}.devices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.device-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.device-name{font-size:21px;font-weight:850}.device-id{color:var(--muted);font-size:12px;margin-top:3px;word-break:break-all}.online-badge{padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid var(--line)}
+.online{color:#8ff0bf;background:rgba(35,196,131,.10)}.offline{color:#ff9cab;background:rgba(255,93,115,.10)}
+.counts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.metric{background:#0d1322;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}.metric .v{font-size:32px;font-weight:850;margin-top:2px}
+.metric.in .v{color:#65e5a8}.metric.out .v{color:#ff8b9a}.metric.occ .v{color:var(--accent2)}
+.meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}.meta-box{background:#0d1322;border:1px solid var(--line);border-radius:12px;padding:10px}.v2{font-weight:750;margin-top:3px;word-break:break-word}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:30px}.settings{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+button{border:0;padding:11px 16px;border-radius:12px;font-weight:800;cursor:pointer;background:var(--accent);color:#06111a}button.secondary{background:#1e2942;color:var(--text);border:1px solid var(--line)}
+.footer{color:var(--muted);font-size:12px;text-align:center;margin:20px 0 8px}.small{font-size:12px;color:var(--muted);margin-top:8px}
+@media(max-width:900px){.summary-grid{grid-template-columns:repeat(2,1fr)}.devices{grid-template-columns:1fr}.settings{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.settings{grid-template-columns:1fr}}
+</style>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+<main class="wrap">
+<div class="header">
+  <div><h1>JB People Counter</h1><div class="subtitle">Multi-Device Dashboard</div></div>
+  <div class="status-pill"><span id="mqttDot" class="dot"></span><span id="mqttStatus">DISCONNECTED</span></div>
+</div>
+
+<section class="summary-grid">
+  <div class="card"><div class="sum-label">DEVICES</div><div id="sumDevices" class="sum-value">0</div></div>
+  <div class="card"><div class="sum-label">ONLINE</div><div id="sumOnline" class="sum-value">0</div></div>
+  <div class="card"><div class="sum-label">TOTAL IN</div><div id="sumIn" class="sum-value">0</div></div>
+  <div class="card"><div class="sum-label">TOTAL OUT</div><div id="sumOut" class="sum-value">0</div></div>
+  <div class="card"><div class="sum-label">TOTAL OCCUPANCY</div><div id="sumOcc" class="sum-value">0</div></div>
+</section>
+
+<section class="controls">
+  <input id="searchInput" type="search" placeholder="Search device name / ID">
+  <select id="filterSelect">
+    <option value="all">All devices</option>
+    <option value="online">Online only</option>
+    <option value="offline">Offline only</option>
+  </select>
+</section>
+
+<section id="devices" class="devices"></section>
+
+<section class="card" style="margin-top:14px">
+  <div class="sum-label">MQTT</div>
+  <div class="small">Broker: <strong>wss://jbnas03.synology.me:8084/mqtt</strong></div>
+  <details>
+    <summary>Advanced Settings</summary>
+    <div class="settings">
+      <div><div class="k">Topic</div><input id="topicInput" value="ghfc/counter"></div>
+      <div><div class="k">Username</div><input id="userInput"></div>
+      <div><div class="k">Password</div><input id="passInput" type="password"></div>
+    </div>
+    <div class="actions">
+      <button id="applyBtn">APPLY & RECONNECT</button>
+      <button id="clearBtn" class="secondary">CLEAR DEVICE LIST</button>
+    </div>
+  </details>
+</section>
+<div class="footer">JB People Counter Monitor</div>
+</main>
+
+<script>
+(() => {
+const BROKER="wss://jbnas03.synology.me:8084/mqtt";
+const DEFAULT_TOPIC="ghfc/counter";
+const OFFLINE_MS=60000;
+const devices=new Map();
+let client=null;
+let activeTopic=localStorage.getItem("jb_pc_topic")||DEFAULT_TOPIC;
+const $=id=>document.getElementById(id);
+const el={
+mqttDot:$("mqttDot"),mqttStatus:$("mqttStatus"),sumDevices:$("sumDevices"),sumOnline:$("sumOnline"),
+sumIn:$("sumIn"),sumOut:$("sumOut"),sumOcc:$("sumOcc"),devices:$("devices"),
+searchInput:$("searchInput"),filterSelect:$("filterSelect"),topicInput:$("topicInput"),
+userInput:$("userInput"),passInput:$("passInput"),applyBtn:$("applyBtn"),clearBtn:$("clearBtn")
+};
+el.topicInput.value=activeTopic;
+el.userInput.value=localStorage.getItem("jb_pc_user")||"";
+el.passInput.value=localStorage.getItem("jb_pc_pass")||"";
+
+function status(text,ok){
+ el.mqttStatus.textContent=text;
+ el.mqttDot.style.background=ok?"#23c483":"#ff5d73";
+ el.mqttDot.style.boxShadow=ok?"0 0 12px rgba(35,196,131,.5)":"0 0 12px rgba(255,93,115,.5)";
+}
+function num(v,d=0){const n=Number(v);return Number.isFinite(n)?n:d}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
+function online(d){return Date.now()-d.lastSeen<=OFFLINE_MS}
+
+function updateDevice(data){
+ const id=String(data.device_id||"").trim();
+ if(!id)return;
+ devices.set(id,{
+  device_id:id,device_name:data.device_name||id,
+  in:num(data.in),out:num(data.out),
+  occupancy:num(data.occupancy,Math.max(0,num(data.in)-num(data.out))),
+  fn:data.fn??"--",tracks:num(data.tracks),event_active:Boolean(data.event_active),
+  last_event:data.last_event??"--",version:data.version??"--",lastSeen:Date.now()
+ });
+ render();
+}
+
+function render(){
+ let list=[...devices.values()].sort((a,b)=>String(a.device_name).localeCompare(String(b.device_name)));
+ el.sumDevices.textContent=list.length;
+ el.sumOnline.textContent=list.filter(online).length;
+ el.sumIn.textContent=list.reduce((s,d)=>s+d.in,0);
+ el.sumOut.textContent=list.reduce((s,d)=>s+d.out,0);
+ el.sumOcc.textContent=list.reduce((s,d)=>s+d.occupancy,0);
+
+ const q=el.searchInput.value.trim().toLowerCase(), f=el.filterSelect.value;
+ list=list.filter(d=>{
+  const on=online(d);
+  if(f==="online"&&!on)return false;
+  if(f==="offline"&&on)return false;
+  if(q&&!(`${d.device_name} ${d.device_id}`.toLowerCase().includes(q)))return false;
+  return true;
+ });
+ if(!list.length){el.devices.innerHTML='<div class="card empty">No matching devices</div>';return;}
+
+ el.devices.innerHTML=list.map(d=>{
+  const on=online(d);
+  return `<article class="card">
+   <div class="device-head">
+    <div><div class="device-name">${esc(d.device_name)}</div><div class="device-id">${esc(d.device_id)}</div></div>
+    <div class="online-badge ${on?"online":"offline"}">${on?"ONLINE":"OFFLINE"}</div>
+   </div>
+   <div class="counts">
+    <div class="metric in"><div class="k">IN</div><div class="v">${d.in}</div></div>
+    <div class="metric out"><div class="k">OUT</div><div class="v">${d.out}</div></div>
+    <div class="metric occ"><div class="k">OCCUPANCY</div><div class="v">${d.occupancy}</div></div>
+   </div>
+   <div class="meta">
+    <div class="meta-box"><div class="k">FN</div><div class="v2">${esc(d.fn)}</div></div>
+    <div class="meta-box"><div class="k">TRACKS</div><div class="v2">${d.tracks}</div></div>
+    <div class="meta-box"><div class="k">EVENT</div><div class="v2" style="color:${d.event_active?"#ffb020":"#23c483"}">${d.event_active?"ACTIVE":"IDLE"}</div></div>
+    <div class="meta-box"><div class="k">LAST EVENT</div><div class="v2">${esc(d.last_event)}</div></div>
+    <div class="meta-box"><div class="k">VERSION</div><div class="v2">${esc(d.version)}</div></div>
+    <div class="meta-box"><div class="k">LAST UPDATE</div><div class="v2">${esc(new Date(d.lastSeen).toLocaleString())}</div></div>
+   </div>
+  </article>`;
+ }).join("");
+}
+
+function connect(){
+ if(client){try{client.end(true)}catch(e){} client=null;}
+ activeTopic=(el.topicInput.value||DEFAULT_TOPIC).trim();
+ const username=el.userInput.value.trim(),password=el.passInput.value;
+ localStorage.setItem("jb_pc_topic",activeTopic);
+ localStorage.setItem("jb_pc_user",username);
+ localStorage.setItem("jb_pc_pass",password);
+
+ const opt={clean:true,connectTimeout:10000,reconnectPeriod:3000,keepalive:30,clientId:"JB_PC_MULTI_"+Math.random().toString(16).slice(2,10)};
+ if(username)opt.username=username;if(password)opt.password=password;
+
+ status("CONNECTING",false);
+ client=mqtt.connect(BROKER,opt);
+ client.on("connect",()=>{status("CONNECTED",true);client.subscribe(activeTopic,{qos:0},err=>{if(err)status("SUBSCRIBE ERROR",false)})});
+ client.on("reconnect",()=>status("RECONNECTING",false));
+ client.on("offline",()=>status("OFFLINE",false));
+ client.on("close",()=>status("DISCONNECTED",false));
+ client.on("error",err=>{status("ERROR",false);console.error(err)});
+ client.on("message",(topic,payload)=>{if(topic!==activeTopic)return;try{updateDevice(JSON.parse(payload.toString()))}catch(e){console.error("Invalid MQTT payload",e)}});
+}
+
+el.searchInput.addEventListener("input",render);
+el.filterSelect.addEventListener("change",render);
+el.applyBtn.addEventListener("click",connect);
+el.clearBtn.addEventListener("click",()=>{devices.clear();render()});
+setInterval(render,5000);
+render();
+connect();
+})();
+</script>
+</body>
+</html>
