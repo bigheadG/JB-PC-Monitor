@@ -32,6 +32,8 @@ details{margin-top:14px}summary{cursor:pointer;font-weight:750;color:var(--accen
   <div class="card occ-card wide">
     <div class="metric-label">OCCUPANCY</div><div id="occupancy" class="metric-value">0</div>
     <div class="details">
+      <div class="detail"><div class="k">DEVICE</div><div id="deviceName" class="v">--</div></div>
+      <div class="detail"><div class="k">DEVICE ID</div><div id="deviceId" class="v">--</div></div>
       <div class="detail"><div class="k">FN</div><div id="fn" class="v">--</div></div>
       <div class="detail"><div class="k">TRACKS</div><div id="tracks" class="v">0</div></div>
       <div class="detail"><div class="k">EVENT</div><div id="eventState" class="v">IDLE</div></div>
@@ -66,7 +68,7 @@ const DEFAULT_TOPIC="ghfc/counter";
 let client=null;
 let activeTopic=localStorage.getItem("jb_pc_topic")||DEFAULT_TOPIC;
 const $=id=>document.getElementById(id);
-const el={inCount:$("inCount"),outCount:$("outCount"),occupancy:$("occupancy"),fn:$("fn"),tracks:$("tracks"),eventState:$("eventState"),lastEvent:$("lastEvent"),lastUpdate:$("lastUpdate"),mqttStatus:$("mqttStatus"),statusDot:$("statusDot"),topicView:$("topicView"),topicInput:$("topicInput"),userInput:$("userInput"),passInput:$("passInput"),applyBtn:$("applyBtn"),resetBtn:$("resetBtn")};
+const el={inCount:$("inCount"),outCount:$("outCount"),occupancy:$("occupancy"),deviceName:$("deviceName"),deviceId:$("deviceId"),fn:$("fn"),tracks:$("tracks"),eventState:$("eventState"),lastEvent:$("lastEvent"),lastUpdate:$("lastUpdate"),mqttStatus:$("mqttStatus"),statusDot:$("statusDot"),topicView:$("topicView"),topicInput:$("topicInput"),userInput:$("userInput"),passInput:$("passInput"),applyBtn:$("applyBtn"),resetBtn:$("resetBtn")};
 el.topicInput.value=activeTopic;
 el.userInput.value=localStorage.getItem("jb_pc_user")||"";
 el.passInput.value=localStorage.getItem("jb_pc_pass")||"";
@@ -80,7 +82,9 @@ function setStatus(text,ok){
 function n(v,d=0){const x=Number(v);return Number.isFinite(x)?x:d}
 function updatePayload(data){
   const i=n(data.in,0),o=n(data.out,0);
-  el.inCount.textContent=i; el.outCount.textContent=o; el.occupancy.textContent=Math.max(0,i-o);
+  el.inCount.textContent=i; el.outCount.textContent=o; el.occupancy.textContent=(data.occupancy!==undefined?data.occupancy:Math.max(0,i-o));
+  el.deviceName.textContent=data.device_name??data.ap_ssid??"--";
+  el.deviceId.textContent=data.device_id??"--";
   el.fn.textContent=data.fn??"--"; el.tracks.textContent=data.tracks??0;
   const a=Boolean(data.event_active); el.eventState.textContent=a?"ACTIVE":"IDLE"; el.eventState.style.color=a?"#ffb020":"#23c483";
   el.lastEvent.textContent=data.last_event??"--"; el.lastUpdate.textContent=new Date().toLocaleString();
