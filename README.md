@@ -20,6 +20,6 @@ https://bigheadg.github.io/JB-PC-Monitor/
 
 
 
+<img width="1331" height="803" alt="image" src="https://github.com/user-attachments/assets/00fb44bb-b21d-43d2-925c-d7e6f4f353b9" />
 
-<img width="1484" height="830" alt="image" src="https://github.com/user-attachments/assets/8ee460a2-0b71-40f8-8f95-49c0f8dc8fff" />
         
